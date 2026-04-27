@@ -7,7 +7,7 @@
   <title>NRD Control de Stock</title>
   <link rel="manifest" href="manifest.json">
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="styles.css?v=1777240385420">
+  <link rel="stylesheet" href="styles.css?v=1777313893293">
   <meta name="theme-color" content="#dc2626">
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
@@ -129,7 +129,8 @@
       const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === '0.0.0.0';
       const nrdDataAccessSrc = isLocalhost
         ? '/nrd-data-access/dist/nrd-data-access.js'
-        : 'https://cdn.jsdelivr.net/gh/yosbany/nrd-data-access@main/dist/nrd-data-access.js';
+        // Pin a commit para evitar cache de CDN y asegurar nrd.stockCounts
+        : 'https://cdn.jsdelivr.net/gh/yosbany/nrd-data-access@e4de2ebb74929fbf38ab2b995a9c4b41b233c86b/dist/nrd-data-access.js';
       const script1 = document.createElement('script');
       script1.src = nrdDataAccessSrc;
       document.head.appendChild(script1);
@@ -209,11 +210,11 @@
       }, 100);
     })();
   </script>
-  <script type="module" src="app.js?v=1777240385420"></script>
+  <script type="module" src="app.js?v=1777313893293"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function() {
-        navigator.serviceWorker.register('service-worker.js?v=1777240385420').catch(function() {});
+        navigator.serviceWorker.register('service-worker.js?v=1777313893293').catch(function() {});
       });
     }
   </script>
