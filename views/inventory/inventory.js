@@ -39,10 +39,15 @@ export function initializeInventory() {
       <p class="text-sm text-gray-600 mb-4">Elegí un producto, registrá la cantidad en existencia y el historial muestra el cambio respecto al conteo anterior.</p>
 
       <div class="mb-4">
-        <label for="inv-product-select" class="block mb-1.5 text-xs uppercase tracking-wider text-gray-600">Producto</label>
-        <select id="inv-product-select" class="w-full px-3 py-2.5 border border-gray-300 rounded focus:outline-none focus:border-red-600 bg-white text-sm">
-          <option value="">Cargando productos…</option>
-        </select>
+        <label for="inv-product-search" class="block mb-1.5 text-xs uppercase tracking-wider text-gray-600">Producto</label>
+        <div class="relative">
+          <input type="text" id="inv-product-search" placeholder="Buscar producto..." autocomplete="off"
+            class="w-full px-3 py-2.5 border border-gray-300 rounded focus:outline-none focus:border-red-600 bg-white text-sm" />
+          <input type="hidden" id="inv-product-select" />
+          <div id="inv-product-search-results"
+            class="hidden absolute z-50 w-full bg-white border border-gray-300 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
+          </div>
+        </div>
         <p class="text-xs text-gray-500 mt-1">Incluye variantes cuando existen; el conteo se guarda por producto y variante (SKU) si aplica.</p>
       </div>
 
@@ -89,6 +94,13 @@ export function initializeInventory() {
 }
 
 let currentKey = { productId: '', variantSku: '' };
+let productsForSelector = [];
+let productSearchTimeout = null;
+let productSearchInputHandler = null;
+let productSearchClickOutsideHandler = null;
+let productSearchKeyboardHandler = null;
+let selectedProductIndex = -1;
+let filteredProductsForSelector = [];
 
 function encodeKey(productId, variantSku, displayName) {
   return btoa(unescape(encodeURIComponent(JSON.stringify({ productId, variantSku, displayName }))));
@@ -105,57 +117,41 @@ function decodeKey(val) {
 
 async function loadProductsAndOptions() {
   const nrd = window.nrd;
-  const sel = document.getElementById('inv-product-select');
-  if (!nrd || !nrd.products || !sel) {
-    if (sel) sel.innerHTML = '<option value="">nrd.products no disponible</option>';
+  const searchInput = document.getElementById('inv-product-search');
+  const hiddenInput = document.getElementById('inv-product-select');
+  if (!nrd || !nrd.products || !searchInput || !hiddenInput) {
+    if (searchInput) searchInput.value = 'nrd.products no disponible';
     return;
   }
   if (!nrd.stockCounts) {
-    sel.innerHTML = '<option value="">nrd.stockCounts no disponible (actualizá nrd-data-access)</option>';
+    searchInput.value = 'nrd.stockCounts no disponible (actualizá nrd-data-access)';
     return;
   }
   try {
     showSpinnerSafe('Cargando productos...');
     const list = await nrd.products.getAll({ flat: true });
-    const active = (list || []).filter((p) => p.active !== false);
-    sel.innerHTML = '<option value="">— Seleccionar producto —</option>';
-    active.forEach((p) => {
-      const { productId, variantSku } = rowToStockKey(p);
-      const display = p.name || p.productName || 'Sin nombre';
-      const opt = document.createElement('option');
-      opt.value = encodeKey(productId, variantSku, display);
-      opt.textContent = display + (p.sku ? ` · SKU ${p.sku}` : '');
-      sel.appendChild(opt);
-    });
+    productsForSelector = (list || []).filter((p) => p && p.active !== false && (p.name || p.productName));
+    // limpia estado previo
+    hiddenInput.value = '';
+    searchInput.value = '';
+    const resultsDiv = document.getElementById('inv-product-search-results');
+    if (resultsDiv) resultsDiv.classList.add('hidden');
   } catch (e) {
     logger.error('Error loading products', e);
-    if (sel) sel.innerHTML = '<option value="">Error al cargar productos</option>';
+    if (searchInput) searchInput.value = 'Error al cargar productos';
   } finally {
     hideSpinnerSafe();
   }
 }
 
 function setupForm() {
-  const sel = document.getElementById('inv-product-select');
+  const searchInput = document.getElementById('inv-product-search');
+  const hiddenInput = document.getElementById('inv-product-select');
+  const resultsDiv = document.getElementById('inv-product-search-results');
   const form = document.getElementById('inv-count-form');
-  if (!sel || !form) return;
+  if (!searchInput || !hiddenInput || !resultsDiv || !form) return;
 
-  sel.addEventListener('change', async () => {
-    const v = sel.value;
-    const meta = decodeKey(v);
-    const histWrap = document.getElementById('inv-history-wrap');
-    if (!meta) {
-      form.classList.add('hidden');
-      if (histWrap) histWrap.classList.add('hidden');
-      return;
-    }
-    currentKey = { productId: meta.productId, variantSku: meta.variantSku || '' };
-    form.classList.remove('hidden');
-    if (histWrap) histWrap.classList.remove('hidden');
-    document.getElementById('inv-quantity').value = '';
-    document.getElementById('inv-notes').value = '';
-    await loadHistory();
-  });
+  setupProductSearch(searchInput, resultsDiv, hiddenInput, form);
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -170,7 +166,7 @@ function setupForm() {
       return;
     }
     const notes = (document.getElementById('inv-notes').value || '').trim();
-    const meta = decodeKey(sel.value);
+    const meta = decodeKey(hiddenInput.value);
     if (!meta) return;
     const payload = {
       productId: meta.productId,
@@ -198,6 +194,146 @@ function setupForm() {
       hideSpinnerSafe();
     }
   });
+}
+
+function setupProductSearch(searchInput, resultsDiv, hiddenInput, form) {
+  const normalizeSearchText = window.normalizeSearchText || window.NRDCommon?.normalizeSearchText || ((t) => String(t || '').toLowerCase());
+
+  function renderResults(filtered) {
+    filteredProductsForSelector = filtered;
+    selectedProductIndex = -1;
+    if (!filtered.length) {
+      resultsDiv.innerHTML = '<div class="px-3 py-2 text-sm text-gray-500">No se encontraron productos</div>';
+      resultsDiv.classList.remove('hidden');
+      return;
+    }
+    const esc = window.escapeHtml || ((t) => {
+      const d = document.createElement('div');
+      d.textContent = t || '';
+      return d.innerHTML;
+    });
+    resultsDiv.innerHTML = filtered.map((p, index) => {
+      const { productId, variantSku } = rowToStockKey(p);
+      const displayName = p.name || p.productName || 'Sin nombre';
+      const encoded = encodeKey(productId, variantSku, displayName);
+      return `
+        <div class="inv-product-search-item px-3 py-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+             data-value="${esc(encoded)}"
+             data-name="${esc(displayName)}"
+             data-index="${index}">
+          <div class="font-light text-sm">${esc(displayName)}</div>
+          ${p.sku ? `<div class="text-xs text-gray-600">SKU ${esc(String(p.sku))}</div>` : `<div class="text-xs text-gray-500">Producto</div>`}
+        </div>
+      `;
+    }).join('');
+    resultsDiv.classList.remove('hidden');
+    document.querySelectorAll('.inv-product-search-item').forEach((item) => {
+      item.addEventListener('click', () => {
+        selectProductItem(item);
+      });
+    });
+  }
+
+  async function onSelected() {
+    const meta = decodeKey(hiddenInput.value);
+    const histWrap = document.getElementById('inv-history-wrap');
+    if (!meta) {
+      form.classList.add('hidden');
+      if (histWrap) histWrap.classList.add('hidden');
+      return;
+    }
+    currentKey = { productId: meta.productId, variantSku: meta.variantSku || '' };
+    form.classList.remove('hidden');
+    if (histWrap) histWrap.classList.remove('hidden');
+    document.getElementById('inv-quantity').value = '';
+    document.getElementById('inv-notes').value = '';
+    await loadHistory();
+  }
+
+  function selectProductItem(item) {
+    const v = item.dataset.value || '';
+    const n = item.dataset.name || '';
+    hiddenInput.value = v;
+    searchInput.value = n;
+    resultsDiv.classList.add('hidden');
+    onSelected();
+  }
+
+  function searchProducts(query) {
+    const term = normalizeSearchText(query.trim());
+    if (term.length === 0) {
+      resultsDiv.classList.add('hidden');
+      return;
+    }
+    const filtered = (productsForSelector || []).filter((p) => {
+      const name = p?.name || p?.productName || '';
+      return normalizeSearchText(name).includes(term);
+    }).slice(0, 50);
+    renderResults(filtered);
+  }
+
+  if (productSearchInputHandler) {
+    searchInput.removeEventListener('input', productSearchInputHandler);
+  }
+  productSearchInputHandler = (e) => {
+    clearTimeout(productSearchTimeout);
+    productSearchTimeout = setTimeout(() => {
+      // al cambiar texto manualmente, invalida selección previa
+      hiddenInput.value = '';
+      form.classList.add('hidden');
+      const histWrap = document.getElementById('inv-history-wrap');
+      if (histWrap) histWrap.classList.add('hidden');
+      searchProducts(e.target.value || '');
+    }, 120);
+  };
+  searchInput.addEventListener('input', productSearchInputHandler);
+
+  if (productSearchKeyboardHandler) {
+    searchInput.removeEventListener('keydown', productSearchKeyboardHandler);
+  }
+  productSearchKeyboardHandler = (e) => {
+    const items = resultsDiv.querySelectorAll('.inv-product-search-item');
+    const total = items.length;
+    if (!total) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      selectedProductIndex = selectedProductIndex >= total - 1 ? 0 : selectedProductIndex + 1;
+      updateSelection(items);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      selectedProductIndex = selectedProductIndex <= 0 ? total - 1 : selectedProductIndex - 1;
+      updateSelection(items);
+    } else if (e.key === 'Enter') {
+      if (selectedProductIndex >= 0 && selectedProductIndex < total) {
+        e.preventDefault();
+        selectProductItem(items[selectedProductIndex]);
+      }
+    } else if (e.key === 'Escape') {
+      resultsDiv.classList.add('hidden');
+    }
+  };
+  searchInput.addEventListener('keydown', productSearchKeyboardHandler);
+
+  function updateSelection(items) {
+    items.forEach((it, idx) => {
+      if (idx === selectedProductIndex) {
+        it.classList.add('bg-red-50');
+        it.scrollIntoView({ block: 'nearest' });
+      } else {
+        it.classList.remove('bg-red-50');
+      }
+    });
+  }
+
+  if (productSearchClickOutsideHandler) {
+    document.removeEventListener('click', productSearchClickOutsideHandler);
+  }
+  productSearchClickOutsideHandler = (e) => {
+    if (!resultsDiv.contains(e.target) && !searchInput.contains(e.target)) {
+      resultsDiv.classList.add('hidden');
+    }
+  };
+  document.addEventListener('click', productSearchClickOutsideHandler);
 }
 
 async function loadHistory() {
