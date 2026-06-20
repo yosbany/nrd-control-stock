@@ -8,14 +8,6 @@ function rowToStockKey(p) {
   return { productId, variantSku: '' };
 }
 
-function showSpinnerSafe(msg) {
-  if (typeof window.showSpinner === 'function') window.showSpinner(msg);
-}
-
-function hideSpinnerSafe() {
-  if (typeof window.hideSpinner === 'function') window.hideSpinner();
-}
-
 function formatNum(n) {
   if (typeof window.formatNumber === 'function') return window.formatNumber(n);
   return String(n);
@@ -128,7 +120,7 @@ async function loadProductsAndOptions() {
     return;
   }
   try {
-    showSpinnerSafe('Cargando productos...');
+    showSpinner('Cargando productos...');
     const list = await nrd.products.getAll({ flat: true });
     productsForSelector = (list || []).filter((p) => p && p.active !== false && (p.name || p.productName));
     // limpia estado previo
@@ -140,7 +132,7 @@ async function loadProductsAndOptions() {
     logger.error('Error loading products', e);
     if (searchInput) searchInput.value = 'Error al cargar productos';
   } finally {
-    hideSpinnerSafe();
+    hideSpinner();
   }
 }
 
@@ -204,7 +196,7 @@ function setupForm() {
       }
     }
     try {
-      showSpinnerSafe('Guardando...');
+      showSpinner('Guardando...');
       await nrd.stockCounts.create(payload);
       if (window.showSuccess) await window.showSuccess('Conteo registrado');
       
@@ -228,7 +220,7 @@ function setupForm() {
       logger.error('Save stock count', err);
       if (window.showError) await window.showError(err.message || 'Error al guardar');
     } finally {
-      hideSpinnerSafe();
+      hideSpinner();
     }
   });
 }
