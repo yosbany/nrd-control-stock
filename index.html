@@ -7,7 +7,7 @@
   <title>NRD Control de Stock</title>
   <link rel="manifest" href="manifest.json">
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="styles.css?v=1781967763916">
+  <link rel="stylesheet" href="styles.css?v=1781979488487">
   <meta name="theme-color" content="#dc2626">
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
@@ -130,7 +130,7 @@
       const nrdDataAccessSrc = isLocalhost
         ? '/nrd-data-access/dist/nrd-data-access.js'
         // Librería NRD Data Access (datos.nrdonline.site)
-        : 'https://datos.nrdonline.site/dist/nrd-data-access.js';
+        : 'https://cdn.jsdelivr.net/gh/yosbany/nrd-data-access@main/dist/nrd-data-access.js';
       const script1 = document.createElement('script');
       script1.src = nrdDataAccessSrc;
       document.head.appendChild(script1);
@@ -141,7 +141,7 @@
       const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === '0.0.0.0';
       const nrdCommonSrc = isLocalhost
         ? '/nrd-common/dist/nrd-common.js'
-        : 'https://common.nrdonline.site/dist/nrd-common.js';
+        : 'https://cdn.jsdelivr.net/gh/yosbany/nrd-common@main/dist/nrd-common.js';
       const script2 = document.createElement('script');
       script2.src = nrdCommonSrc;
       document.head.appendChild(script2);
@@ -170,11 +170,11 @@
     })({ appName: 'NRD Control de Stock' });
   </script>
 
-  <script type="module" src="app.js?v=1781967763916"></script>
+  <script type="module" src="app.js?v=1781979488487"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function() {
-        navigator.serviceWorker.register('service-worker.js?v=1781967763916').catch(function() {});
+        navigator.serviceWorker.register('service-worker.js?v=1781979488487').catch(function() {});
       });
     }
   </script>
