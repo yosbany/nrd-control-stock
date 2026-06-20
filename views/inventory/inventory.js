@@ -160,6 +160,14 @@ function setupForm() {
       if (window.showError) await window.showError('Servicio no disponible');
       return;
     }
+    
+    // Validar que el método create existe
+    if (typeof nrd.stockCounts.create !== 'function') {
+      logger.error('Save stock count', new Error('nrd.stockCounts.create no está disponible'));
+      if (window.showError) await window.showError('Método create no disponible. Actualizá nrd-data-access.');
+      return;
+    }
+    
     const q = parseFloat(String(document.getElementById('inv-quantity').value).replace(',', '.'), 10);
     if (Number.isNaN(q) || q < 0) {
       if (window.showError) await window.showError('Ingresá una cantidad válida');
@@ -167,26 +175,55 @@ function setupForm() {
     }
     const notes = (document.getElementById('inv-notes').value || '').trim();
     const meta = decodeKey(hiddenInput.value);
-    if (!meta) return;
+    if (!meta) {
+      if (window.showError) await window.showError('Seleccioná un producto válido');
+      return;
+    }
     const payload = {
       productId: meta.productId,
-      variantSku: meta.variantSku || undefined,
       productName: meta.displayName,
       quantity: q,
-      notes: notes || undefined,
       createdAt: Date.now()
     };
-    if (currentKey.variantSku) {
+    
+    // Solo agregar variantSku si tiene valor (no undefined, null o string vacío)
+    if (meta.variantSku && meta.variantSku !== '') {
+      payload.variantSku = meta.variantSku;
+    }
+    
+    // Solo agregar notes si tiene valor
+    if (notes) {
+      payload.notes = notes;
+    }
+    
+    // Solo agregar variantName si hay variantSku
+    if (meta.variantSku && meta.variantSku !== '') {
       const parts = (meta.displayName || '').split(' - ');
-      if (parts.length > 1) payload.variantName = parts.slice(1).join(' - ');
+      if (parts.length > 1) {
+        payload.variantName = parts.slice(1).join(' - ');
+      }
     }
     try {
       showSpinnerSafe('Guardando...');
       await nrd.stockCounts.create(payload);
       if (window.showSuccess) await window.showSuccess('Conteo registrado');
+      
+      // Resetear todo a estado inicial
       document.getElementById('inv-quantity').value = '';
       document.getElementById('inv-notes').value = '';
-      await loadHistory();
+      searchInput.value = '';
+      hiddenInput.value = '';
+      
+      // Ocultar formulario y historial
+      form.classList.add('hidden');
+      const histWrap = document.getElementById('inv-history-wrap');
+      if (histWrap) histWrap.classList.add('hidden');
+      
+      // Limpiar currentKey
+      currentKey = { productId: '', variantSku: '' };
+      
+      // Enfocar el buscador para siguiente conteo
+      searchInput.focus();
     } catch (err) {
       logger.error('Save stock count', err);
       if (window.showError) await window.showError(err.message || 'Error al guardar');
@@ -342,6 +379,15 @@ async function loadHistory() {
   const empty = document.getElementById('inv-history-empty');
   if (!nrd || !nrd.stockCounts || !body) return;
   if (!currentKey.productId) return;
+  
+  // Validar que el método existe
+  if (typeof nrd.stockCounts.listByProductAndVariant !== 'function') {
+    logger.error('loadHistory', new Error('nrd.stockCounts.listByProductAndVariant no está disponible'));
+    body.innerHTML = '<tr><td colspan="4" class="px-3 py-2 text-red-600">Método listByProductAndVariant no disponible. Actualizá nrd-data-access.</td></tr>';
+    if (empty) empty.classList.add('hidden');
+    return;
+  }
+  
   let rows;
   try {
     rows = await nrd.stockCounts.listByProductAndVariant(
@@ -350,7 +396,8 @@ async function loadHistory() {
     );
   } catch (e) {
     logger.error('loadHistory', e);
-    body.innerHTML = '<tr><td colspan="4" class="px-3 py-2 text-red-600">Error al cargar historial</td></tr>';
+    body.innerHTML = '<tr><td colspan="4" class="px-3 py-2 text-red-600">Error al cargar historial: ' + (e.message || 'Error desconocido') + '</td></tr>';
+    if (empty) empty.classList.add('hidden');
     return;
   }
   if (!rows.length) {
