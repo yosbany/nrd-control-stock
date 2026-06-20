@@ -42,61 +42,21 @@ function createNavigationService() {
   return navigationService;
 }
 
-function waitForNRDAndInitialize() {
-  const maxWait = 10000;
-  const startTime = Date.now();
-  const checkInterval = 100;
-  const checkNRD = setInterval(() => {
-    const nrd = window.nrd;
-    const NRDCommon = window.NRDCommon;
-    if (nrd && nrd.auth && NRDCommon) {
-      clearInterval(checkNRD);
-      logger.info('NRD, auth, and NRDCommon available, setting up onAuthStateChanged');
-      createNavigationService();
-      const currentUser = nrd.auth.getCurrentUser();
-      if (currentUser) {
-        logger.info('Current user found, initializing immediately', { uid: currentUser.uid, email: currentUser.email });
-        initializeAppForUser(currentUser);
-      }
-      nrd.auth.onAuthStateChanged((user) => {
-        if (user) {
-          initializeAppForUser(user);
-        } else {
-          appInitialized = false;
-        }
-      });
-    } else if (Date.now() - startTime >= maxWait) {
-      clearInterval(checkNRD);
-      logger.error('NRD, auth, or NRDCommon not available after timeout');
-    }
-  }, checkInterval);
-}
+function initializeAppForUser(user) {
+  logger.info('Initializing app for user', { uid: user.uid, email: user.email });
 
-waitForNRDAndInitialize();
-
-let appInitialized = false;
-function initializeAppForUser(_user) {
-  if (appInitialized) {
+  const navService = createNavigationService();
+  if (!navService) {
+    logger.error('Could not create NavigationService');
     return;
   }
-  appInitialized = true;
 
-  const appScreen = document.getElementById('app-screen');
-  const loginScreen = document.getElementById('login-screen');
-  const redirectingScreen = document.getElementById('redirecting-screen');
-
-  if (appScreen) appScreen.classList.remove('hidden');
-  if (loginScreen) loginScreen.classList.add('hidden');
-  if (redirectingScreen) redirectingScreen.classList.add('hidden');
-
-  setTimeout(() => {
-    const navService = createNavigationService();
-    if (!navService) {
-      logger.error('Could not create NavigationService');
-      return;
-    }
-    setupNavigationButtons();
-    navService.setupNavButtons();
-    navService.switchView('inventory');
-  }, 300);
+  setupNavigationButtons();
+  navService.setupNavButtons();
+  navService.switchView('inventory');
 }
+
+(window.NRDCommon?.startApp || function(fn, opts) {
+  window.__nrdStartQueue = window.__nrdStartQueue || [];
+  window.__nrdStartQueue.push({ onReady: fn, options: opts || {} });
+})(initializeAppForUser, { initDelay: 300 });

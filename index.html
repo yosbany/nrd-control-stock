@@ -50,7 +50,7 @@
   <div id="redirecting-screen" class="min-h-screen flex items-center justify-center bg-white">
     <div class="flex flex-col items-center gap-4">
       <div class="w-12 h-12 border-4 border-gray-200 border-t-red-600 rounded-full animate-spin"></div>
-      <p class="text-sm text-gray-600 font-light">Redirigiendo...</p>
+      <p class="text-sm text-gray-600 font-light" data-auth-status>Redirigiendo...</p>
     </div>
   </div>
 
@@ -147,69 +147,29 @@
       document.head.appendChild(script2);
     })();
   </script>
+  <!-- NRD Common Library Initialization -->
   <script>
-    (function() {
-      const maxWait = 10000;
-      const startTime = Date.now();
-      function showLoginFallback() {
-        const redirectingScreen = document.getElementById('redirecting-screen');
-        const loginScreen = document.getElementById('login-screen');
-        const appScreen = document.getElementById('app-screen');
-        if (appScreen && !appScreen.classList.contains('hidden')) return;
-        if (redirectingScreen) redirectingScreen.classList.add('hidden');
-        if (loginScreen) loginScreen.classList.remove('hidden');
-      }
-      const checkNRDCommon = setInterval(function() {
-        if (typeof window.NRDCommon !== 'undefined') {
-          clearInterval(checkNRDCommon);
-          window.logger = new window.NRDCommon.Logger('NRD Control de Stock', {
-            logLevel: window.NRDCommon.LOG_LEVELS.INFO,
-            enableColors: true,
-            enableTimestamp: true
-          });
-          if (window.NRDCommon) {
-            window.showAlert = window.NRDCommon.showAlert;
-            window.showConfirm = window.NRDCommon.showConfirm;
-            window.showError = window.NRDCommon.showError;
-            window.showSuccess = window.NRDCommon.showSuccess;
-            window.showInfo = window.NRDCommon.showInfo;
-            window.showWarning = window.NRDCommon.showWarning;
-            window.showSpinner = window.NRDCommon.showSpinner;
-            window.hideSpinner = window.NRDCommon.hideSpinner;
-            window.formatNumber = window.NRDCommon.formatNumber;
-            window.formatCurrency = window.NRDCommon.formatCurrency;
-            window.formatDecimalWithComma = window.NRDCommon.formatDecimalWithComma;
-            window.parseDecimalWithComma = window.NRDCommon.parseDecimalWithComma;
-            window.escapeHtml = window.NRDCommon.escapeHtml;
-            window.getMonthName = window.NRDCommon.getMonthName;
-            window.formatDate = window.NRDCommon.formatDate;
-          }
-          if (window.NRDCommon.initializeNRD) {
-            window.NRDCommon.initializeNRD().then(function(success) {
-              if (success) {
-                if (window.NRDCommon.AuthService && window.nrd) {
-                  try {
-                    window.authService = new window.NRDCommon.AuthService(window.nrd);
-                  } catch (error) {
-                    showLoginFallback();
-                  }
-                } else {
-                  showLoginFallback();
-                }
-              } else {
-                showLoginFallback();
-              }
-            }).catch(function() { showLoginFallback(); });
+    (function(cfg) {
+      var start = Date.now();
+      var timer = setInterval(function() {
+        if (window.NRDCommon && window.NRDCommon.initializeAppAuth) {
+          clearInterval(timer);
+          window.NRDCommon.initializeAppAuth(cfg);
+        } else if (Date.now() - start > 10000) {
+          clearInterval(timer);
+          if (window.NRDCommon && window.NRDCommon.showLoginFallback) {
+            window.NRDCommon.showLoginFallback();
           } else {
-            showLoginFallback();
+            var ls = document.getElementById('login-screen');
+            var rs = document.getElementById('redirecting-screen');
+            if (rs) rs.classList.add('hidden');
+            if (ls) ls.classList.remove('hidden');
           }
-        } else if (Date.now() - startTime >= maxWait) {
-          clearInterval(checkNRDCommon);
-          showLoginFallback();
         }
       }, 100);
-    })();
+    })({ appName: 'NRD Control de Stock' });
   </script>
+
   <script type="module" src="app.js?v=1780057171819"></script>
   <script>
     if ('serviceWorker' in navigator) {
