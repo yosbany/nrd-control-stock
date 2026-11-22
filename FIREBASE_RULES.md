@@ -1,12 +1,14 @@
 # Reglas de Firebase — Control de Stock
 
-Las reglas **completas del sistema** (empleados vs catálogo anónimo) están en:
+Este repo **no** es dueño de las reglas RTDB del sistema.
 
-**[FIREBASE_RULES.md](../FIREBASE_RULES.md)** (raíz del repo)
+Documento histórico de reglas (JSON del repo GitHub `nrd-system`, **no** necesariamente LIVE):
 
-Publicá ese JSON en Firebase Console → Realtime Database → Reglas.
+`https://github.com/yosbany/nrd-system/blob/main/FIREBASE_RULES.md`
 
-Lo siguiente solo documenta el índice de `stockCounts` (ya incluido en el archivo central):
+Baseline LIVE (verificado en Console): `nrd-enterprise-architecture/platform/security/03-firebase-security-baseline.md`
+
+Índice de `stockCounts` (incluido en el archivo histórico):
 
 ```json
 "stockCounts": {
