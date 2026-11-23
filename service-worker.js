@@ -76,7 +76,7 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, r)).catch(() => {});
         }
         return response;
-      });
+      }).catch(() => Response.error());
     })
   );
 });
